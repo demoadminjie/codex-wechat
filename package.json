@@ -1,6 +1,6 @@
 {
   "name": "codex-wechat",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Direct Weixin-to-Codex bridge without OpenClaw as runtime host.",
   "private": true,
   "license": "MIT",
