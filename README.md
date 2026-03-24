@@ -1,5 +1,7 @@
 # codex-wechat
 
+**Code by Codex**
+
 `codex-wechat` 直接复用微信插件背后的微信 HTTP 协议，把链路改成：
 
 `微信 App -> codex-wechat -> 本地 codex app-server -> 微信 App`
