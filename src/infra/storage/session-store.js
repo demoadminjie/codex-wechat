@@ -292,6 +292,42 @@ class SessionStore {
     return this.state.availableModelCatalog;
   }
 
+  listTrackedThreads(accountId = "") {
+    const normalizedAccountId = normalizeValue(accountId);
+    const tracked = [];
+    const seenThreadIds = new Set();
+
+    for (const [bindingKey, binding] of Object.entries(this.state.bindings || {})) {
+      if (!binding || typeof binding !== "object") {
+        continue;
+      }
+      if (normalizedAccountId && normalizeValue(binding.accountId) !== normalizedAccountId) {
+        continue;
+      }
+
+      const threadIdByWorkspaceRoot = getThreadMap(binding);
+      for (const [workspaceRoot, threadId] of Object.entries(threadIdByWorkspaceRoot)) {
+        const normalizedWorkspaceRoot = normalizeValue(workspaceRoot);
+        const normalizedThreadId = normalizeValue(threadId);
+        if (!normalizedWorkspaceRoot || !normalizedThreadId || seenThreadIds.has(normalizedThreadId)) {
+          continue;
+        }
+        seenThreadIds.add(normalizedThreadId);
+        tracked.push({
+          bindingKey,
+          workspaceRoot: normalizedWorkspaceRoot,
+          threadId: normalizedThreadId,
+          workspaceId: normalizeValue(binding.workspaceId),
+          accountId: normalizeValue(binding.accountId),
+          senderId: normalizeValue(binding.senderId),
+          updatedAt: normalizeValue(binding.updatedAt),
+        });
+      }
+    }
+
+    return tracked.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
   updateBinding(bindingKey, nextBinding) {
     this.state.bindings[bindingKey] = {
       ...nextBinding,

@@ -5,6 +5,10 @@ const path = require("path");
 const { SessionStore } = require("../infra/storage/session-store");
 const { CodexRpcClient } = require("../infra/codex/rpc-client");
 const codexMessageUtils = require("../infra/codex/message-utils");
+const {
+  inspectCodexHistorySync,
+  syncCodexThreadHistory,
+} = require("../infra/codex/history-sync");
 const { getUpdates, sendMessage, getConfig, sendTyping } = require("../infra/weixin/api");
 const { sendWeixinMediaFile } = require("../infra/weixin/media-send");
 const { resolveSelectedAccount } = require("../infra/weixin/account-store");
@@ -82,6 +86,7 @@ class WechatRuntime {
     this.approvalAllowlistByWorkspaceRoot = new Map();
     this.resumedThreadIds = new Set();
     this.inFlightApprovalRequestKeys = new Set();
+    this.codexHistorySyncEnabled = false;
     this.codex.onMessage((message) => {
       this.handleCodexMessage(message).catch((error) => {
         console.error(`[codex-wechat] failed to handle Codex message: ${error.message}`);
@@ -95,6 +100,7 @@ class WechatRuntime {
     this.restorePersistedContextTokens();
     await this.codex.connect();
     await this.codex.initialize();
+    await this.prepareCodexHistorySync();
     await this.refreshAvailableModelCatalogAtStartup();
     console.log(`[codex-wechat] runtime ready account=${this.account.accountId} userId=${this.account.userId || "(unknown)"}`);
     await this.monitorLoop();
@@ -176,6 +182,48 @@ class WechatRuntime {
         );
       }
     }
+  }
+
+  async prepareCodexHistorySync() {
+    const report = inspectCodexHistorySync({
+      env: process.env,
+      codexCommand: this.config.codexCommand,
+    });
+    this.codexHistorySyncEnabled = report.canSync;
+
+    const detailSuffix = report.codexVersion ? ` version=${report.codexVersion}` : "";
+    console.log(`[codex-wechat] codex history sync home=${report.codexHome}${detailSuffix}`);
+    for (const warning of report.warnings) {
+      console.warn(`[codex-wechat] history sync warning: ${warning}`);
+    }
+    if (!this.codexHistorySyncEnabled) {
+      return;
+    }
+
+    const trackedThreads = this.sessionStore.listTrackedThreads(this.account?.accountId || "");
+    if (!trackedThreads.length) {
+      return;
+    }
+
+    let syncedCount = 0;
+    let skippedCount = 0;
+    for (const trackedThread of trackedThreads) {
+      const result = this.syncThreadIntoCodexHistory(trackedThread.threadId, {
+        workspaceRoot: trackedThread.workspaceRoot,
+      });
+      if (result.ok) {
+        syncedCount += 1;
+      } else {
+        skippedCount += 1;
+        if (result.reason !== "thread_not_found") {
+          console.warn(
+            `[codex-wechat] history backfill skipped thread=${trackedThread.threadId}: ${result.reason || "unknown"}`
+          );
+        }
+      }
+    }
+
+    console.log(`[codex-wechat] history backfill done synced=${syncedCount} skipped=${skippedCount}`);
   }
 
   async monitorLoop() {
@@ -463,7 +511,7 @@ class WechatRuntime {
     this.sessionStore.clearThreadIdForWorkspace(bindingKey, workspaceRoot);
     await this.sendReplyToNormalized(
       normalized,
-      `已切换到新会话，\n\nworkspace: ${workspaceRoot}\n。`
+      `已切换到新会话，workspace: \n${workspaceRoot}`
     );
   }
 
@@ -963,6 +1011,10 @@ class WechatRuntime {
       });
       this.bindingKeyByThreadId.set(createdThreadId, bindingKey);
       this.workspaceRootByThreadId.set(createdThreadId, workspaceRoot);
+      this.syncThreadIntoCodexHistory(createdThreadId, {
+        normalized,
+        workspaceRoot,
+      });
       return createdThreadId;
     }
 
@@ -979,6 +1031,10 @@ class WechatRuntime {
       });
       this.bindingKeyByThreadId.set(threadId, bindingKey);
       this.workspaceRootByThreadId.set(threadId, workspaceRoot);
+      this.syncThreadIntoCodexHistory(threadId, {
+        normalized,
+        workspaceRoot,
+      });
       return threadId;
     } catch (error) {
       if (!shouldRecreateThread(error)) {
@@ -1001,6 +1057,10 @@ class WechatRuntime {
       });
       this.bindingKeyByThreadId.set(recreatedThreadId, bindingKey);
       this.workspaceRootByThreadId.set(recreatedThreadId, workspaceRoot);
+      this.syncThreadIntoCodexHistory(recreatedThreadId, {
+        normalized,
+        workspaceRoot,
+      });
       return recreatedThreadId;
     }
   }
@@ -1083,6 +1143,28 @@ class WechatRuntime {
         },
       });
     }
+  }
+
+  syncThreadIntoCodexHistory(threadId, { normalized = null, workspaceRoot = "" } = {}) {
+    if (!this.codexHistorySyncEnabled) {
+      return { ok: false, reason: "history_sync_disabled" };
+    }
+
+    const result = syncCodexThreadHistory({
+      env: process.env,
+      threadId,
+      threadName: normalized?.text || "",
+      firstUserMessage: normalized?.text || "",
+      workspaceRoot,
+      updatedAt: new Date(),
+    });
+
+    if (!result.ok && result.reason !== "thread_not_found") {
+      console.warn(
+        `[codex-wechat] history sync failed thread=${threadId}: ${result.reason || result.message || "unknown"}`
+      );
+    }
+    return result;
   }
 
   resolveWorkspaceFilePath(workspaceRoot, requestedPath) {
@@ -1335,6 +1417,11 @@ class WechatRuntime {
     }
 
     await this.stopTypingForThread(threadId);
+    if (threadId) {
+      this.syncThreadIntoCodexHistory(threadId, {
+        workspaceRoot: this.workspaceRootByThreadId.get(threadId) || "",
+      });
+    }
 
     if (context) {
       if (outbound.payload.state === "completed") {
