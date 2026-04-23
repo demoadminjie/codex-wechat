@@ -4,17 +4,31 @@ const path = require("path");
 
 const { redactSensitiveText } = require("./redact");
 
-function readChannelVersion() {
+function readPackageMetadata() {
   try {
     const pkgPath = path.resolve(__dirname, "../../../package.json");
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-    return pkg.version || "unknown";
+    return JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   } catch {
-    return "unknown";
+    return {};
   }
 }
 
-const CHANNEL_VERSION = readChannelVersion();
+function buildClientVersion(version) {
+  const parts = String(version || "0.0.0")
+    .split(".")
+    .map((part) => Number.parseInt(part, 10));
+  const major = Number.isFinite(parts[0]) ? parts[0] : 0;
+  const minor = Number.isFinite(parts[1]) ? parts[1] : 0;
+  const patch = Number.isFinite(parts[2]) ? parts[2] : 0;
+  return ((major & 0xff) << 16) | ((minor & 0xff) << 8) | (patch & 0xff);
+}
+
+const PACKAGE_METADATA = readPackageMetadata();
+const CHANNEL_VERSION = PACKAGE_METADATA.version || "unknown";
+const ILINK_APP_ID = typeof PACKAGE_METADATA.ilink_appid === "string"
+  ? PACKAGE_METADATA.ilink_appid.trim()
+  : "";
+const ILINK_APP_CLIENT_VERSION = String(buildClientVersion(CHANNEL_VERSION));
 const DEFAULT_LONG_POLL_TIMEOUT_MS = 35_000;
 const DEFAULT_API_TIMEOUT_MS = 15_000;
 const DEFAULT_CONFIG_TIMEOUT_MS = 10_000;
@@ -32,17 +46,57 @@ function randomWechatUin() {
   return Buffer.from(String(uint32), "utf8").toString("base64");
 }
 
+function buildCommonHeaders() {
+  const headers = {
+    "iLink-App-ClientVersion": ILINK_APP_CLIENT_VERSION,
+  };
+  if (ILINK_APP_ID) {
+    headers["iLink-App-Id"] = ILINK_APP_ID;
+  }
+  return headers;
+}
+
 function buildHeaders(opts) {
   const headers = {
     "Content-Type": "application/json",
     AuthorizationType: "ilink_bot_token",
     "Content-Length": String(Buffer.byteLength(opts.body, "utf8")),
     "X-WECHAT-UIN": randomWechatUin(),
+    ...buildCommonHeaders(),
   };
   if (opts.token && String(opts.token).trim()) {
     headers.Authorization = `Bearer ${String(opts.token).trim()}`;
   }
   return headers;
+}
+
+async function apiGetFetch(params) {
+  const base = ensureTrailingSlash(params.baseUrl);
+  const url = new URL(params.endpoint, base);
+  const timeoutMs = Number(params.timeoutMs) > 0 ? Number(params.timeoutMs) : 0;
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: buildCommonHeaders(),
+      signal: controller ? controller.signal : undefined,
+    });
+    if (timer) {
+      clearTimeout(timer);
+    }
+    const rawText = await response.text();
+    if (!response.ok) {
+      throw new Error(`${params.label} ${response.status}: ${redactSensitiveText(rawText)}`);
+    }
+    return rawText;
+  } catch (error) {
+    if (timer) {
+      clearTimeout(timer);
+    }
+    throw error;
+  }
 }
 
 async function apiFetch(params) {
@@ -158,6 +212,7 @@ async function sendTyping(params) {
 }
 
 module.exports = {
+  apiGetFetch,
   buildBaseInfo,
   getConfig,
   getUploadUrl,

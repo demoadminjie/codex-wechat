@@ -114,6 +114,8 @@ function buildDownloadCandidates(attachment, cdnBaseUrl) {
     addCandidate(candidates, seen, directUrl);
   }
 
+  addCandidate(candidates, seen, attachment?.mediaRef?.fullUrl);
+
   const encryptedQueryParam = normalizeText(attachment?.mediaRef?.encryptQueryParam);
   if (encryptedQueryParam) {
     const normalizedCdnBaseUrl = String(cdnBaseUrl || "").replace(/\/+$/g, "");

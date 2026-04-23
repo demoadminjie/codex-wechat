@@ -16,11 +16,12 @@
     "start": "node ./bin/codex-wechat.js start",
     "login": "node ./bin/codex-wechat.js login",
     "accounts": "node ./bin/codex-wechat.js accounts",
-    "check": "node --check ./src/index.js && node --check ./src/app/wechat-runtime.js && node --check ./src/infra/config/config.js && node --check ./src/infra/storage/session-store.js && node --check ./src/infra/codex/rpc-client.js && node --check ./src/infra/codex/message-utils.js && node --check ./src/infra/weixin/api.js && node --check ./src/infra/weixin/login.js && node --check ./src/infra/weixin/account-store.js && node --check ./src/infra/weixin/context-token-store.js && node --check ./src/infra/weixin/redact.js && node --check ./src/infra/weixin/sync-buffer-store.js && node --check ./src/infra/weixin/message-utils.js && node --check ./src/infra/weixin/media-mime.js && node --check ./src/infra/weixin/media-receive.js && node --check ./src/infra/weixin/media-send.js && node --check ./src/shared/command-parsing.js && node --check ./src/shared/workspace-paths.js && node --check ./src/shared/model-catalog.js && node --check ./src/shared/error-text.js"
+    "check": "node --check ./src/index.js && node --check ./src/app/wechat-runtime.js && node --check ./src/infra/config/config.js && node --check ./src/infra/storage/session-store.js && node --check ./src/infra/codex/rpc-client.js && node --check ./src/infra/codex/message-utils.js && node --check ./src/infra/weixin/api.js && node --check ./src/infra/weixin/login.js && node --check ./src/infra/weixin/account-store.js && node --check ./src/infra/weixin/context-token-store.js && node --check ./src/infra/weixin/redact.js && node --check ./src/infra/weixin/sync-buffer-store.js && node --check ./src/infra/weixin/message-utils.js && node --check ./src/infra/weixin/markdown-filter.js && node --check ./src/infra/weixin/media-mime.js && node --check ./src/infra/weixin/media-receive.js && node --check ./src/infra/weixin/media-send.js && node --check ./src/shared/command-parsing.js && node --check ./src/shared/workspace-paths.js && node --check ./src/shared/model-catalog.js && node --check ./src/shared/error-text.js"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
     "qrcode-terminal": "0.12.0",
     "ws": "^8.19.0"
-  }
+  },
+  "ilink_appid": "bot"
 }

@@ -24,9 +24,11 @@ function buildCdnUploadUrl({ cdnBaseUrl, uploadParam, filekey }) {
   return `${cdnBaseUrl}/upload?encrypted_query_param=${encodeURIComponent(uploadParam)}&filekey=${encodeURIComponent(filekey)}`;
 }
 
-async function uploadBufferToCdn({ buf, uploadParam, filekey, cdnBaseUrl, aeskey }) {
+async function uploadBufferToCdn({ buf, uploadFullUrl, uploadParam, filekey, cdnBaseUrl, aeskey }) {
   const ciphertext = encryptAesEcb(buf, aeskey);
-  const cdnUrl = buildCdnUploadUrl({ cdnBaseUrl, uploadParam, filekey });
+  const cdnUrl = uploadFullUrl
+    ? String(uploadFullUrl).trim()
+    : buildCdnUploadUrl({ cdnBaseUrl, uploadParam, filekey });
   let lastError = null;
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -80,13 +82,17 @@ async function uploadMediaToWeixin({ filePath, toUserId, opts, cdnBaseUrl, media
     aeskey: aeskey.toString("hex"),
   });
 
+  const uploadFullUrl = typeof uploadUrlResp?.upload_full_url === "string"
+    ? uploadUrlResp.upload_full_url.trim()
+    : "";
   const uploadParam = uploadUrlResp?.upload_param || "";
-  if (!uploadParam) {
-    throw new Error("getUploadUrl returned no upload_param");
+  if (!uploadFullUrl && !uploadParam) {
+    throw new Error("getUploadUrl returned no upload URL");
   }
 
   const { downloadParam } = await uploadBufferToCdn({
     buf: plaintext,
+    uploadFullUrl: uploadFullUrl || undefined,
     uploadParam,
     filekey,
     cdnBaseUrl,

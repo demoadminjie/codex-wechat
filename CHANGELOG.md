@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## [0.2.1] - 2026-04-23
+
+### Added
+
+- Added a streaming-style Weixin markdown filter so outbound replies can preserve more readable structures such as fenced code blocks, tables, and common inline formatting instead of flattening everything to plain text.
+- Added `iLink-App-Id` and computed `iLink-App-ClientVersion` headers to the Weixin API layer, and exposed a shared GET request helper for QR login polling.
+
+### Changed
+
+- Changed QR login to start from the fixed `https://ilinkai.weixin.qq.com` entrypoint and follow `scaned_but_redirect` host redirects returned by the Weixin login API.
+- Changed QR status polling to treat transient network and gateway errors as retryable wait states instead of failing the whole login flow immediately.
+- Changed package metadata and local checks so the Weixin runtime publishes `ilink_appid: "bot"` and syntax validation includes the new markdown filter module.
+- Changed project documentation to reflect current Weixin attachment handling and the new outbound markdown compatibility behavior.
+
+### Fixed
+
+- Fixed outbound media upload compatibility with newer Weixin CDN responses by accepting `upload_full_url` in addition to legacy `upload_param`.
+- Fixed inbound attachment download compatibility with newer Weixin media payloads by accepting `full_url` in addition to legacy encrypted query parameters.
+- Fixed attachment normalization so newer Weixin media items keep both direct full URLs and `media.full_url` references for later download and decryption.
+
 ## [0.2.0] - 2026-03-24
 
 ### Added

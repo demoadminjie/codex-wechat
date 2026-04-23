@@ -1,3 +1,5 @@
+const { filterWeixinOutboundMarkdown } = require("./markdown-filter");
+
 const TEXT_ITEM_TYPE = 1;
 const IMAGE_ITEM_TYPE = 2;
 const VOICE_ITEM_TYPE = 3;
@@ -105,9 +107,11 @@ function normalizeAttachmentItem(item, index) {
       payload.body?.url,
       payload.body?.download_url,
       payload.body?.cdn_url,
+      payload.body?.full_url,
       media?.url,
       media?.download_url,
       media?.cdn_url,
+      media?.full_url,
     ]),
     mediaRef: {
       encryptQueryParam: normalizeText(
@@ -138,6 +142,11 @@ function normalizeAttachmentItem(item, index) {
         media?.filekey
         || payload.body?.filekey
         || item?.filekey
+      ),
+      fullUrl: normalizeText(
+        media?.full_url
+        || payload.body?.full_url
+        || item?.full_url
       ),
     },
     rawItem: item,
@@ -233,19 +242,7 @@ function matchesPrefixCommand(text, command) {
 }
 
 function markdownToPlainText(text) {
-  let result = String(text || "");
-  result = result.replace(/```[^\n]*\n?([\s\S]*?)```/g, (_, code) => String(code || "").trim());
-  result = result.replace(/!\[[^\]]*]\([^)]*\)/g, "");
-  result = result.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
-  result = result.replace(/`([^`]+)`/g, "$1");
-  result = result.replace(/\*\*([^*]+)\*\*/g, "$1");
-  result = result.replace(/\*([^*]+)\*/g, "$1");
-  result = result.replace(/^>\s?/gm, "");
-  result = result.replace(/^\|[\s:|-]+\|$/gm, "");
-  result = result.replace(/^\|(.+)\|$/gm, (_, inner) =>
-    String(inner || "").split("|").map((cell) => cell.trim()).join("  ")
-  );
-  return result.trim();
+  return filterWeixinOutboundMarkdown(text).trim();
 }
 
 function chunkReplyText(text, limit = 3500) {
